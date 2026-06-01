@@ -1,11 +1,22 @@
-import express, { Request, Response, NextFunction } from 'express';
-import swaggerUi from 'swagger-ui-express';
-import YAML from 'yamljs';
-import path from 'path';
-import { createRouter } from './routes';
+import express, { Request, Response, NextFunction } from "express";
+import swaggerUi from "swagger-ui-express";
+import path from "path";
+import fs from "fs";
+import { createRouter } from "./routes";
+import oasTelemetry from "@oas-tools/oas-telemetry";
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+const oasTelemetryConfig = {
+  general: {
+    baseUrl: "/telemetry",
+    specFileName: "openapi.json",
+  },
+  auth: {
+    enabled: false,
+  },
+};
 
 app.use(express.json());
 
@@ -19,20 +30,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Swagger UI
-const swaggerDocument = YAML.load(path.join(__dirname, '../openapi.yaml'));
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+// Swagger UI - Load JSON directly
+const swaggerPath = path.join(__dirname, "../openapi.json");
+const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, "utf8"));
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Routes
-app.use('/', createRouter());
+app.use("/", createRouter());
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('[ERROR] Unhandled error', { error: err.message, stack: err.stack });
-  res.status(500).json({ error: 'Something went wrong' });
+  console.error("[ERROR] Unhandled error", {
+    error: err.message,
+    stack: err.stack,
+  });
+  res.status(500).json({ error: "Something went wrong" });
 });
 
 app.listen(port, () => {
   console.log(`[INFO] Microservice listening at http://localhost:${port}`);
-  console.log(`[INFO] Swagger UI available at http://localhost:${port}/api-docs`);
+  console.log(
+    `[INFO] Swagger UI available at http://localhost:${port}/api-docs`,
+  );
 });
+
+app.use(oasTelemetry(oasTelemetryConfig));

@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
-const yamljs_1 = __importDefault(require("yamljs"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const routes_1 = require("./routes");
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3000;
@@ -20,8 +20,9 @@ app.use((req, res, next) => {
     });
     next();
 });
-// Swagger UI
-const swaggerDocument = yamljs_1.default.load(path_1.default.join(__dirname, '../openapi.yaml'));
+// Swagger UI - Load JSON directly
+const swaggerPath = path_1.default.join(__dirname, '../openapi.json');
+const swaggerDocument = JSON.parse(fs_1.default.readFileSync(swaggerPath, 'utf8'));
 app.use('/api-docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerDocument));
 // Routes
 app.use('/', (0, routes_1.createRouter)());
