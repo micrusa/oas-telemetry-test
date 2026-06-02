@@ -24,6 +24,24 @@ const port = process.env.PORT || 3000;
  metrics.extraExporters no existe?
  */
 
+import {
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-grpc"; // or otlp-http
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+
+// 1. Configure the OTLP Exporter
+// By default, this sends data to http://localhost:4317 (gRPC) or 4318 (HTTP)
+const otlpExporter = new OTLPMetricExporter();
+
+// 2. Setup the Metric Reader
+const prometheusMetricReader = new PeriodicExportingMetricReader({
+  exporter: otlpExporter,
+  exportIntervalMillis: 5000, // Push every 5 seconds
+});
+
 const oasTelemetryConfig = {
   general: {
     specFileName: "openapi.json",
@@ -40,7 +58,7 @@ const oasTelemetryConfig = {
     extraProcessors: [new TestSpanProcessor()],
   },
   metrics: {
-    extraReaders: [new TestMetricReader()],
+    extraReaders: [new TestMetricReader(), prometheusMetricReader],
   },
   auth: {
     enabled: false,
