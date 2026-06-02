@@ -3,15 +3,44 @@ import swaggerUi from "swagger-ui-express";
 import path from "path";
 import fs from "fs";
 import { createRouter } from "./routes";
-import oasTelemetry from "@oas-tools/oas-telemetry";
+import { oasTelemetry } from "oas-telemetry-workspace";
+import { TestLogExporter } from "./exporters/testLogExporter";
+import { TestSpanExporter } from "./exporters/testSpanExporter";
+import { TestSpanProcessor } from "./processors/testSpanProcessor";
+import { TestLogProcessor } from "./processors/testLogProcessor";
+import { TestMetricReader } from "./readers/testMetricReader";
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+/**
+ spanProcessors: oasTlmConfig.traces.extraProcessors,
+ metricReaders: oasTlmConfig.metrics.extraReaders,
+ logRecordProcessors: oasTlmConfig.logs.extraProcessors,
+
+ oasTlmConfig.{traces|logs}.extraExporters
+
+
+ metrics.extraExporters no existe?
+ */
+
 const oasTelemetryConfig = {
   general: {
-    baseUrl: "/telemetry",
     specFileName: "openapi.json",
+  },
+  storage: {
+    path: "./data",
+  },
+  logs: {
+    //extraExporters: [new TestLogExporter()],
+    //extraProcessors: [new TestLogProcessor()],
+  },
+  traces: {
+    extraExporters: [new TestSpanExporter()],
+    extraProcessors: [new TestSpanProcessor()],
+  },
+  metrics: {
+    extraReaders: [new TestMetricReader()],
   },
   auth: {
     enabled: false,
