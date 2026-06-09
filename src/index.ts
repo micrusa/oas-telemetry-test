@@ -1,9 +1,9 @@
+import { oasTelemetry } from "@oas-tools/oas-telemetry";
 import express, { Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import path from "path";
 import fs from "fs";
 import { createRouter } from "./routes";
-import { oasTelemetry } from "oas-telemetry-workspace";
 import { TestLogExporter } from "./exporters/testLogExporter";
 import { TestSpanExporter } from "./exporters/testSpanExporter";
 import { TestSpanProcessor } from "./processors/testSpanProcessor";
@@ -24,46 +24,54 @@ const port = process.env.PORT || 3000;
  metrics.extraExporters no existe?
  */
 
-import {
-  MeterProvider,
-  PeriodicExportingMetricReader,
-} from "@opentelemetry/sdk-metrics";
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-grpc"; // or otlp-http
-import { Resource } from "@opentelemetry/resources";
-import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { BaseExporterOptions } from "./disk/BaseDiskJsonExporter";
+import { DiskLogExporter } from "./disk/DiskLogExporter";
+import { DiskTraceExporter } from "./disk/DiskTraceExporter";
+import { DiskMetricReader } from "./disk/DiskMetricReader";
 
-// 1. Configure the OTLP Exporter
-// By default, this sends data to http://localhost:4317 (gRPC) or 4318 (HTTP)
-const otlpExporter = new OTLPMetricExporter();
-
-// 2. Setup the Metric Reader
-const prometheusMetricReader = new PeriodicExportingMetricReader({
-  exporter: otlpExporter,
-  exportIntervalMillis: 5000, // Push every 5 seconds
-});
+function createDiskConfig(): BaseExporterOptions {
+  return {
+    directoryPath: `./data`,
+    flushIntervalMs: 5000,
+    batchSize: 50,
+    maxSegmentBytes: 1024 * 1024 * 1024, // 1GB
+  };
+}
 
 const oasTelemetryConfig = {
   general: {
     specFileName: "openapi.json",
   },
-  storage: {
-    path: "./data",
-  },
   logs: {
+    extraExporters: [new DiskLogExporter(createDiskConfig())],
     //extraExporters: [new TestLogExporter()],
     //extraProcessors: [new TestLogProcessor()],
   },
   traces: {
-    extraExporters: [new TestSpanExporter()],
-    extraProcessors: [new TestSpanProcessor()],
+    extraExporters: [new DiskTraceExporter(createDiskConfig())],
+    //extraExporters: [new TestSpanExporter()],
+    //extraProcessors: [new TestSpanProcessor()],
   },
   metrics: {
-    extraReaders: [new TestMetricReader(), prometheusMetricReader],
+    extraReaders: [
+      new DiskMetricReader({
+        ...createDiskConfig(),
+        exportIntervalMillis: 1000,
+        exportTimeoutMillis: 1000,
+      }),
+    ],
+    mainMetricReaderOptions: {
+      exportIntervalMillis: 1000,
+    },
+    //extraReaders: [new DiskMetricExporter(createDiskConfig())],
+    //extraReaders: [new TestMetricReader(), prometheusMetricReader],
   },
   auth: {
     enabled: false,
   },
 };
+
+const telemetryRouter = oasTelemetry(oasTelemetryConfig);
 
 app.use(express.json());
 
@@ -81,6 +89,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const swaggerPath = path.join(__dirname, "../openapi.json");
 const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, "utf8"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Mount telemetry router before main router
+app.use(telemetryRouter);
 
 // Routes
 app.use("/", createRouter());
@@ -100,5 +111,3 @@ app.listen(port, () => {
     `[INFO] Swagger UI available at http://localhost:${port}/api-docs`,
   );
 });
-
-app.use(oasTelemetry(oasTelemetryConfig));
